@@ -1,7 +1,5 @@
 #include <Arduino.h>
-#include <cstdint>
 #include "keypadInput.h"
-#include "buzzer.h"
 
 //define the cymbols on the buttons of the keypads
 char hexaKeys[4][4] = {

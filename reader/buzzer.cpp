@@ -1,27 +1,28 @@
 #include <cstdint>
 #include <Arduino.h>
 #include "buzzer.h"
+#include "indicator.h"
 
 const uint8_t buzzerPin = 5;
 
-int buzzer_1() {
+void buzzer_1() {
   digitalWrite(buzzerPin, HIGH);
-  delay(300);
+  delay(150);
   digitalWrite(buzzerPin, LOW);
-  delay(300);
+  delay(100);
   digitalWrite(buzzerPin, HIGH);
-  delay(300);
+  delay(150);
   digitalWrite(buzzerPin, LOW);
 
-  return 1;
+  greenIndic();
 }
 
-int buzzer_0() {
+void buzzer_0() {
   digitalWrite(buzzerPin, HIGH);
   delay(1000);
   digitalWrite(buzzerPin, LOW);
 
-  return 0;
+  yellowIndic();
 }
 
 void buzzKey() {

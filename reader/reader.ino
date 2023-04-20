@@ -25,22 +25,22 @@ void setup() {
   SPI.begin(); // Init SPI bus
   rfid.PCD_Init(); // Init MFRC522
 
-  // Set up pinMode for buzzer
+  /* Set up pinMode for buzzer */
   pinMode(buzzerPin, OUTPUT);
 
-  /* LED pinMode */
+  /* Set up pinMode for LED */
   pinMode(rPin, OUTPUT);
   pinMode(yPin, OUTPUT);
   pinMode(gPin, OUTPUT);
 
   digitalWrite(rPin, HIGH); // Power Indicator
 
-  rfid.PCD_DumpVersionToSerial(); // Show details of PCD - MFRC522 Card Reader details
+  /* Show details of PCD - MFRC522 Card Reader details */
+  rfid.PCD_DumpVersionToSerial();
   Serial.println(F("Scan PICC to see UID, SAK, type, and data blocks..."));
 }
 
 void loop() {
-  int access;
   if ( ! rfid.PICC_IsNewCardPresent() || ! rfid.PICC_ReadCardSerial()) {
     char newKey = passKey.getKey();
 
@@ -55,21 +55,12 @@ void loop() {
         Serial.print("Passcode Inserted: ");
         Serial.println(passCode);
 
-        /* Buzzer ON at access */
+        /* All indicator ON at access */
         if (passCode == "BC1558") {
-          access = buzzer_1();
+          buzzer_1();
         }
         else {
-          access = buzzer_0();
-        }
-        /* LED indicator */
-        if (access) {
-          // Granted
-          greenIndic();
-        }
-        else {
-          // Denied
-          yellowIndic();
+          buzzer_0();
         }
         passCode = "";        
         return;
@@ -104,22 +95,12 @@ void loop() {
   UID.toUpperCase();
   Serial.println(UID);
 
-  /* Buzzer ON at access */
+  /* All indicator ON at access */
   if (UID == "53:A9:3C:10") {
-    access = buzzer_1();
+    buzzer_1();
   }
   else {
-    access = buzzer_0();
-  }
-
-  /* LED indicator */
-  if (access) {
-    // Granted
-    greenIndic();
-  }
-  else {
-    // Denied
-    yellowIndic();
+    buzzer_0();
   }
 
   UID = "";
