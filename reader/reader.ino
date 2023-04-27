@@ -1,70 +1,211 @@
-/* Run by client (reader) */
+/* Run by client (reader)                                                       */
 
+/* Preprocessors                                                                */
+/* #include <lib>                                                               */
+#include <WiFi.h>
+#include <esp_now.h>
 #include <SPI.h>
 #include <MFRC522.h>
 #include <Keypad.h>
+/********************************************************************************/
+/* #include "header.h"                                                          */
 #include "buzzer.h"
 #include "indicator.h"
 #include "keypadInput.h"
+#include "espnow.h"
+/********************************************************************************/
 
+/* Variable init                                                                */
+/* MFRC522 pins                                                                 */
 constexpr uint8_t RST_PIN = 22;     // Reset pin (SCL - GPIO22)
 constexpr uint8_t SS_PIN = 21;     // Slave select pin (SDA - GPIO21)
+/********************************************************************************/
 
-// Initialize an instance of class rfid
+/* Class init                                                                   */
+/* Initialize an instance of class rfid                                         */
 MFRC522 rfid(SS_PIN, RST_PIN); 
-
-// Initialize an instance of class passCode
+/********************************************************************************/
+/* Initialize an instance of class passCode                                     */
 Keypad passKey = Keypad( makeKeymap(hexaKeys), rowPins, colPins, 4, 4); 
+/********************************************************************************/
 
+/* Variable declarations                                                        */
 String passCode;
 String UID;
+String encryptedData;    // Variable to store data to be sent (UID or passCode)
+int8_t isGivenAccess;   // Variable to store data to be received
+String success;        // Variable to store if sending data was successful
+/********************************************************************************/
 
+/* Typedef declarations                                                         */
+/* Structure of data to send to the server                                      */
+typedef struct {
+  String Data;
+} send_data;
+/* Strcuture of data to receive from the server                                 */
+typedef struct {
+  int8_t access;
+} receive_data;
+/********************************************************************************/
+send_data mfrcKeypadReadings;        // A data to send to server
+receive_data accessStatus;          // A data to receive from server
+/********************************************************************************/
+
+esp_now_peer_info_t peerInfo;
+
+/********************************************************************************/
+/* Start of ESP-NOW Functions                                                   */
+/********************************************************************************/
+/* Callback when data is sent                                                   */
+void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
+  Serial.print("\r\nLast Packet Send Status:\t");
+  Serial.println(status == ESP_NOW_SEND_SUCCESS ? 
+    "Delivery Success" : 
+    "Delivery Fail"
+  );
+  if (status == 0){
+    success = "Delivery Success :)";
+  }
+  else{
+    success = "Delivery Fail :(";
+  }
+}
+
+/* Callback when data is received                                               */
+void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
+  memcpy(&accessStatus, incomingData, sizeof(accessStatus));
+  Serial.print("Bytes received: ");
+  Serial.println(len);
+  isGivenAccess = accessStatus.access;
+}
+/* End of ESP-NOW Functions                                                     */
+/********************************************************************************/
+
+/********************************************************************************/
+/*Start of main functions                                                       */
+/********************************************************************************/
 void setup() {
   Serial.begin(115200);
 
-  SPI.begin(); // Init SPI bus
-  rfid.PCD_Init(); // Init MFRC522
+  /* Init for MFRC522                                                           */
+  SPI.begin(); // SPI bus
+  rfid.PCD_Init(); // MFRC522
 
-  /* Set up pinMode for buzzer */
+  /******************************************************************************/
+  /* Start of ESP-NOW Setup                                                     */
+  /******************************************************************************/
+  /* Initialize ESP-NOW                                                         */
+  WiFi.mode(WIFI_STA);  // Set as wifi station
+  if (esp_now_init() != ESP_OK) {
+    Serial.println("Error initializing ESP-NOW");
+    return;
+  }
+
+  /* register for Send CB to get the status of trasnmitted packet               */
+  esp_now_register_send_cb(OnDataSent);
+
+  /* Register peer                                                              */
+  memcpy(peerInfo.peer_addr, bcAddress, 6);
+  peerInfo.channel = 0;  
+  peerInfo.encrypt = false;
+  
+  /* Add peer                                                                   */
+  if (esp_now_add_peer(&peerInfo) != ESP_OK){
+    Serial.println("Failed to add peer");
+    return;
+  }
+
+  /* Register for a callback function that will be called when data is received */
+  esp_now_register_recv_cb(OnDataRecv);
+
+  /* End of ESP-NOW Setup                                                       */
+  /******************************************************************************/
+
+  /* Set up pinMode for buzzer                                                  */
   pinMode(buzzerPin, OUTPUT);
 
-  /* Set up pinMode for LED */
+  /* Set up pinMode for LED                                                     */
   pinMode(rPin, OUTPUT);
   pinMode(yPin, OUTPUT);
   pinMode(gPin, OUTPUT);
 
   digitalWrite(rPin, HIGH); // Power Indicator
 
-  /* Show details of PCD - MFRC522 Card Reader details */
+  /* Show details of PCD - MFRC522 Card Reader details                          */
   rfid.PCD_DumpVersionToSerial();
   Serial.println(F("Scan PICC to see UID, SAK, type, and data blocks..."));
 }
 
 void loop() {
+  /******************************************************************************/
+  /* Start of Reading System                                                    */
+  /******************************************************************************/
   if ( ! rfid.PICC_IsNewCardPresent() || ! rfid.PICC_ReadCardSerial()) {
+    /****************************************************************************/
+    /*Start of Keypad Section                                                   */
+    /****************************************************************************/
     char newKey = passKey.getKey();
 
-    /* No newKey detected */
+    /* No newKey detected                                                       */
     if ( ! newKey) {
+      /**************************************************************************/
+      /* Start of Data Encryption System (encryptedData)                        */
+      /**************************************************************************/
+      // Encrypt Data
+
+      /* End of Data Encryption System                                          */
+      /**************************************************************************/
+
+      /**************************************************************************/
+      /* Start of ESP-NOW System                                                */
+      /**************************************************************************/
+      /*Set up values to send                                                   */
+      mfrcKeypadReadings.Data = encryptedData;
+      encryptedData = "";
+
+      /* Send message via ESP-NOW                                               */
+      esp_err_t result = esp_now_send(bcAddress, 
+                                      (uint8_t *) &mfrcKeypadReadings, 
+                                      sizeof(mfrcKeypadReadings));
+      Serial.println((result == ESP_OK) ? 
+        "Sent with success" : 
+        "Error sending the data"
+      );
+    
+      /* End of ESP-NOW System                                                  */
+      /**************************************************************************/
+
+      /**************************************************************************/
+      /* Start of Indicator System                                              */
+      /**************************************************************************/
+      if (isGivenAccess == 1) {
+        buzzer_1();
+      }
+      else if (isGivenAccess == 0) {
+        buzzer_0();
+      }
+      else {
+        // isGivenAccess = -1
+        // Do nothing
+      }
+
+      /* End of Indicator System                                                */
+      /**************************************************************************/
       return;
     }
+    /* newKey detected                                                          */
     else {
       buzzKey();
       if (newKey == 'D') {
-        /* End of passCode */
+        /* End of passCode                                                      */
         Serial.print("Passcode Inserted: ");
         Serial.println(passCode);
 
-        /* All indicator ON at access */
-        if (passCode == "BC1558") {
-          buzzer_1();
-        }
-        else {
-          buzzer_0();
-        }
+        encryptedData = passCode;
         passCode = "";        
         return;
       }
+      /* Backspace input passcode                                               */
       else if (newKey == '*' && passCode != "") {
         passCode = passCode.substring(0, passCode.length() - 1);
         Serial.println(passCode);
@@ -73,15 +214,20 @@ void loop() {
       else if (newKey == '*' && passCode == "") {
         return;
       }
-      /* Get passcode               */
-      /* Append passCode to newKey  */
+      /* Get passcode                                                           */
+      /* Append passCode to newKey                                              */
       passCode += newKey;
       Serial.println(passCode);
       return;
     }
+    /* End of Keypad Section                                                    */
+    /****************************************************************************/
   }
 
-  /* Reads UID of card and assign it to String UID */ 
+  /******************************************************************************/
+  /* Start of RFID Section                                                      */
+  /******************************************************************************/
+  /* Reads UID of card and assign it to String UID                              */ 
   for (byte i = 0; i < rfid.uid.size; i++) {
     // Add "0" in front of a hex value if less than 0x10
     UID += (rfid.uid.uidByte[i] < 0x10 ? "0" : "") + 
@@ -95,16 +241,16 @@ void loop() {
   UID.toUpperCase();
   Serial.println(UID);
 
-  /* All indicator ON at access */
-  if (UID == "53:A9:3C:10") {
-    buzzer_1();
-  }
-  else {
-    buzzer_0();
-  }
-
+  encryptedData = UID;
   UID = "";
-  passCode = "";
   rfid.PICC_HaltA();
   rfid.PCD_StopCrypto1();
+  /* End of RFID Section                                                        */ 
+  /******************************************************************************/
+
+  /* End of Reading System                                                      */
+  /******************************************************************************/
 }
+
+/* End of main functions                                                        */
+/********************************************************************************/
