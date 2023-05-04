@@ -40,8 +40,8 @@ receive_data mfrcKeypadReadings;       // A data to receive from reader
 
 /* Variable init                                                                */
 data_auth dataAuth = {
-  .Uid = {"53:A9:3C:10", "89:01:18:16"},
-  .Passcode = "BC1447"
+  .Uid = {"53A93C10", "89011816"},
+  .Passcode = "BC144781"
 };
 /********************************************************************************/
 
