@@ -2,6 +2,10 @@
 	"folders": [
 		{
 			"path": "reader"
+		},
+		{
+			"name": "server",
+			"path": "server"
 		}
 	]
 }
