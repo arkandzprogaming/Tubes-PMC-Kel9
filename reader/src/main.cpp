@@ -7,6 +7,9 @@
 #include <esp_now.h>
 #include <SPI.h>
 #include <Keypad.h>
+
+#include <time.h>
+#include <esp_heap_caps.h>
 /********************************************************************************/
 /* #include "header.h"                                                          */
 #include "MFRC522.h"
@@ -14,7 +17,9 @@
 #include "indicator.h"
 #include "keypadInput.h"
 #include "espnow.h"
+
 #include "esch.hpp"
+#include "sha256.h"
 /********************************************************************************/
 
 /* Variable init                                                                */
@@ -43,7 +48,13 @@ String success;        // Variable to store if sending data was successful
 /* ESCH256                                                                      */
 uint8_t decimalData[d_len];            // Variable to store decimal plainData
 uint8_t dig0[esch256::DIGEST_LEN];    // Variable to store digest of esch256
-// uint8_t dig1[esch384::DIGEST_LEN];
+/* SHA-256                                                                      */
+BYTE decimalDataSHA[SHA256_BLOCK_SIZE]; // Variable to store decimal plainData
+BYTE digSHA[SHA256_BLOCK_SIZE];        // Variable to store digest of SHA-256
+SHA256_CTX* ctx;                      // Struct to store SHA-256 context
+/* Time                                                                         */
+clock_t start, end;
+double cpu_time_used;
 /********************************************************************************/
 
 /* Typedef declarations                                                         */
@@ -51,6 +62,9 @@ uint8_t dig0[esch256::DIGEST_LEN];    // Variable to store digest of esch256
 typedef struct {
   uint8_t Dig[esch256::DIGEST_LEN];
 } send_data;
+// typedef struct {
+//   BYTE Dig[SHA256_BLOCK_SIZE];
+// } send_data;
 /* Strcuture of data to receive from the server                                 */
 typedef struct {
   int8_t Access;
@@ -158,7 +172,7 @@ void loop() {
     /* No newKey detected                                                       */
     if ( ! newKey) {
       /**************************************************************************/
-      /* Start of Data Hashing System (plainData)                               */
+      /* Start of Data Hashing System (ESCH256)                                 */
       /**************************************************************************/
       if (plainData.length() > 0) {
         size_t idx = 0;
@@ -191,8 +205,42 @@ void loop() {
       /* End of Data Hashing System                                             */
       /**************************************************************************/
 
+      // /**************************************************************************/
+      // /* Start of Data Hashing System (SHA-256)                                 */
+      // /**************************************************************************/
+      // if (plainData.length() > 0) {
+      //   int idx = 0;
+      //   /* Convert String to an array of ASCII decimal encoding                 */
+      //   for (int i = 0; i < SHA256_BLOCK_SIZE; i++) {
+      //     decimalDataSHA[i] = plainData.charAt(idx++);    // Get decimal value
+      //     if (idx == 7) {
+      //       idx = 0;
+      //     }
+      //   }
+      // }
+      // else {
+      //   // plainData is empty
+      //   // Assign 0 to decimalDataSHA
+      //   memset(decimalDataSHA, 0, sizeof(decimalDataSHA));
+      // }
+
+      // Serial.print("Decimal values: ");
+      // for (int i = 0; i < SHA256_BLOCK_SIZE; i++) {
+      //   Serial.print(decimalDataSHA[i]);
+      // }
+      // Serial.println();
+      // plainData = "";
+      
+      // /* Compute SHA-256 digest                                                 */
+      // sha256_init(ctx);
+      // sha256_update(ctx, decimalDataSHA, SHA256_BLOCK_SIZE);
+      // sha256_final(ctx, digSHA);
+
+      // /* End of Data Hashing System                                             */
+      // /**************************************************************************/
+
       /**************************************************************************/
-      /* Start of ESP-NOW System                                                */
+      /* Start of ESP-NOW System (Esch256)                                      */
       /**************************************************************************/
       /*Set up values to send                                                   */
       memcpy(mfrcKeypadReadings.Dig, dig0, sizeof(dig0));
@@ -220,11 +268,61 @@ void loop() {
       /* End of ESP-NOW System                                                  */
       /**************************************************************************/
 
+      // /**************************************************************************/
+      // /* Start of ESP-NOW System (SHA-256)                                      */
+      // /**************************************************************************/
+      // /*Set up values to send                                                   */
+      // memcpy(mfrcKeypadReadings.Dig, digSHA, sizeof(digSHA));
+      // Serial.println();
+      // Serial.print("Digest SHA (mfrcKeypadReadings.Dig): ");
+      // for (int i = 0; i < 32; i++) {
+      //   Serial.print("0x");
+      //   if (mfrcKeypadReadings.Dig[i] < 0x10) {
+      //     Serial.print("0"); // Add a leading zero for single-digit hex values
+      //   }
+      //   Serial.print(mfrcKeypadReadings.Dig[i], HEX);
+      //   Serial.print(" ");
+      // }
+      // Serial.println();
+
+      // /* Send message via ESP-NOW                                               */
+      // esp_err_t result = esp_now_send(bcAddress, 
+      //                                 (uint8_t *) &mfrcKeypadReadings, 
+      //                                 sizeof(mfrcKeypadReadings));
+      // Serial.println((result == ESP_OK) ? 
+      //   "Sent with success" : 
+      //   "Error sending the data"
+      // );
+    
+      // /* End of ESP-NOW System                                                  */
+      // /**************************************************************************/
+
       /**************************************************************************/
       /* Start of Indicator System                                              */
       /**************************************************************************/
       if (isGivenAccess == 1) {
         buzzer_1();
+
+        end = clock();
+        cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+
+        Serial.print("Time spent: ");
+        Serial.println(cpu_time_used);
+
+        /* End of Time Counting                                                 */
+        /************************************************************************/
+
+        /* Calculate free memory                                                */
+        uint32_t freeHeapBytes = heap_caps_get_free_size(MALLOC_CAP_DEFAULT);
+        uint32_t totalHeapBytes = heap_caps_get_total_size(MALLOC_CAP_DEFAULT);
+        float percentageHeapFree = freeHeapBytes * 100.0f / 
+                                   (float)totalHeapBytes;
+
+        Serial.printf("[Memory] %.1f%% free - %lu of %lu bytes free\n", 
+                      percentageHeapFree, 
+                      freeHeapBytes, 
+                      totalHeapBytes
+        );
       }
       else if (isGivenAccess == 0) {
         buzzer_0();
@@ -244,6 +342,11 @@ void loop() {
     else {
       buzzKey();
       if (newKey == 'D') {
+        /************************************************************************/
+        /* Start of Time Counting                                               */
+        /************************************************************************/
+        start = clock();
+
         /* End of passCode                                                      */
         Serial.print("Passcode Inserted: ");
         Serial.println(passCode);
@@ -270,6 +373,10 @@ void loop() {
     /* End of Keypad Section                                                    */
     /****************************************************************************/
   }
+  /******************************************************************************/
+  /* Start of Time Counting                                                     */
+  /******************************************************************************/
+  start = clock();
 
   /******************************************************************************/
   /* Start of RFID Section                                                      */

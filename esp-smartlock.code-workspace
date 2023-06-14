@@ -6,6 +6,9 @@
 		{
 			"name": "server",
 			"path": "server"
+		},
+		{
+			"path": "hashing-speed"
 		}
 	],
 	"settings": {
